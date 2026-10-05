@@ -31,5 +31,9 @@ fs.mkdirSync("public", { recursive: true });
 fs.mkdirSync("dist", { recursive: true });
 fs.writeFileSync("public/index.html", site);
 fs.writeFileSync("dist/pokesleep.html", artifact);
-if (fs.existsSync("images")) fs.cpSync("images", "public/images", { recursive: true });
+// fs.cpSync は Windows の日本語パスで Node が落ちるため、1ファイルずつコピーする
+if (fs.existsSync("images")) {
+  fs.mkdirSync("public/images", { recursive: true });
+  for (const f of fs.readdirSync("images")) fs.copyFileSync(`images/${f}`, `public/images/${f}`);
+}
 console.log("built public/index.html, dist/pokesleep.html");
