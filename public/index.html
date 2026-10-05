@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="手持ちの食材の数を入れると、ポケモンスリープで今作れる料理と、あと何個で作れるかを表示します。">
+<title>ポケスリ料理判定</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap">
+<style>
+/* 夜空の青を基調にした、柔らかい丸ゴシックのツール画面 */
+:root {
+  --bg: #f3f5fb;
+  --card: #ffffff;
+  --text: #1f2440;
+  --muted: #6d7391;
+  --line: #dde1ef;
+  --chip: #eceffa;
+  --accent: #4a6cf0;
+  --on-accent: #ffffff;
+  --ok: #23854d;
+  --ok-bg: #e3f5ea;
+  --ng: #cf3f3a;
+  --ng-bg: #fdeceb;
+  --curry-bg: #fff1dc; --curry: #a85a06;
+  --salad-bg: #e5f6e3; --salad: #2f7d32;
+  --dessert-bg: #fde7f1; --dessert: #a8336b;
+  --font: "M PLUS Rounded 1c", system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12152a; --card: #1c2040; --text: #e8eaf6; --muted: #9ba1c4; --line: #2e3460; --chip: #262b52;
+    --accent: #7d95ff; --on-accent: #10132a;
+    --ok: #6fd69a; --ok-bg: #18382a; --ng: #ff8a84; --ng-bg: #3d1e24;
+    --curry-bg: #3a2a12; --curry: #ffbf6b; --salad-bg: #1c3420; --salad: #8fdc92; --dessert-bg: #3a1e2e; --dessert: #f59ac4;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12152a; --card: #1c2040; --text: #e8eaf6; --muted: #9ba1c4; --line: #2e3460; --chip: #262b52;
+  --accent: #7d95ff; --on-accent: #10132a;
+  --ok: #6fd69a; --ok-bg: #18382a; --ng: #ff8a84; --ng-bg: #3d1e24;
+  --curry-bg: #3a2a12; --curry: #ffbf6b; --salad-bg: #1c3420; --salad: #8fdc92; --dessert-bg: #3a1e2e; --dessert: #f59ac4;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 10;
+}
+header h1 { font-size: 1.2rem; margin: 0; }
+
+main { max-width: 960px; margin: 0 auto; padding: 16px; }
+section { margin-bottom: 28px; }
+h2 { font-size: 1.05rem; margin: 0 0 12px; }
+h2 small { color: var(--muted); font-weight: normal; }
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 8px;
+  padding: 6px 12px;
+}
+button:hover { border-color: var(--accent); }
+#reset.confirm { background: var(--ng); border-color: var(--ng); color: var(--card); }
+
+.badge {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+/* ----- アイテム ----- */
+.item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.item-card {
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 8px;
+  text-align: center;
+  transition: border-color .15s;
+}
+.item-card.owned { border-color: var(--accent); }
+
+.item-img {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 6px;
+  display: grid;
+  place-items: center;
+}
+.item-img img { max-width: 100%; max-height: 100%; }
+.item-img .fallback {
+  display: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--chip);
+  font-size: 1.4rem;
+  font-weight: bold;
+  line-height: 56px;
+}
+.item-img.no-img img { display: none; }
+.item-img.no-img .fallback { display: block; }
+
+.item-name { font-size: 0.85rem; line-height: 1.3; min-height: 2.6em; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; }
+
+.counter { display: flex; align-items: center; justify-content: center; gap: 4px; }
+.counter button { width: 30px; height: 30px; padding: 0; font-size: 1.1rem; }
+.counter input {
+  width: 44px;
+  height: 30px;
+  text-align: center;
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  -moz-appearance: textfield;
+}
+.counter input::-webkit-outer-spin-button,
+.counter input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* ----- カテゴリタブ ----- */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + 54px);
+  background: var(--bg);
+  padding: 8px 0;
+  z-index: 5;
+}
+.tabs button { border-radius: 999px; }
+.tabs button.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+.cat {
+  margin-left: 8px;
+  font-size: 0.75rem;
+  font-weight: normal;
+  padding: 1px 8px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+.cat-curry { background: var(--curry-bg); color: var(--curry); }
+.cat-salad { background: var(--salad-bg); color: var(--salad); }
+.cat-dessert { background: var(--dessert-bg); color: var(--dessert); }
+
+/* ----- レシピ ----- */
+.recipe-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+
+.recipe {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.recipe.can { border-left: 5px solid var(--ok); }
+
+.recipe-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.recipe-name { font-weight: bold; }
+.total { color: var(--ng); white-space: nowrap; }
+
+.lacks, .reqs { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 0.85rem; }
+.lack, .req { padding: 2px 8px; border-radius: 999px; }
+.lack { background: var(--ng-bg); color: var(--ng); font-weight: bold; }
+.req.ok { background: var(--ok-bg); color: var(--ok); }
+.req.ng { background: var(--chip); color: var(--muted); }
+
+.empty { color: var(--muted); padding: 8px 0; }
+
+button, input { color: var(--text); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.counter input { background: var(--bg); }
+
+footer { max-width: 960px; margin: 0 auto; padding: 8px 16px 32px; color: var(--muted); font-size: 0.8rem; }
+footer a { color: var(--accent); }
+
+@media (max-width: 420px) {
+  .item-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .item-card { padding: 8px 4px; }
+  .counter button { width: 26px; }
+  .counter input { width: 36px; }
+}
+
+</style>
+</head>
+<body>
+<header>
+    <h1>ポケスリ料理判定</h1>
+    <button id="reset" type="button">リセット</button>
+  </header>
+
+  <main>
+    <section>
+      <h2>持っている食材</h2>
+      <div id="items" class="item-grid"></div>
+    </section>
+
+    <nav id="tabs" class="tabs"></nav>
+
+    <section>
+      <h2>作れるもの <span id="can-count" class="badge"></span></h2>
+      <ul id="can-make" class="recipe-list"></ul>
+    </section>
+
+    <section>
+      <h2>あと少しで作れるもの <small>（不足数が少ない順）</small></h2>
+      <ul id="almost" class="recipe-list"></ul>
+    </section>
+  </main>
+
+  <footer>
+    非公式のファンツールです。レシピデータ出典: <a href="https://game8.jp/pokemonsleep/543259" target="_blank" rel="noopener">Game8 ポケモンスリープ攻略</a>。入力した個数はお使いのブラウザにのみ保存されます。
+  </footer>
+<script>
+// ===== 食材定義 =====
+// image: images フォルダに置く画像（無い場合は名前の頭文字を表示）
+const ITEMS = [
+  { id: "leek", name: "ふといながねぎ", image: "images/leek.png" },
+  { id: "mushroom", name: "あじわいキノコ", image: "images/mushroom.png" },
+  { id: "egg", name: "とくせんエッグ", image: "images/egg.png" },
+  { id: "potato", name: "ほっこりポテト", image: "images/potato.png" },
+  { id: "apple", name: "とくせんリンゴ", image: "images/apple.png" },
+  { id: "herb", name: "げきからハーブ", image: "images/herb.png" },
+  { id: "sausage", name: "マメミート", image: "images/sausage.png" },
+  { id: "milk", name: "モーモーミルク", image: "images/milk.png" },
+  { id: "honey", name: "あまいミツ", image: "images/honey.png" },
+  { id: "oil", name: "ピュアなオイル", image: "images/oil.png" },
+  { id: "ginger", name: "あったかジンジャー", image: "images/ginger.png" },
+  { id: "tomato", name: "あんみんトマト", image: "images/tomato.png" },
+  { id: "cacao", name: "リラックスカカオ", image: "images/cacao.png" },
+  { id: "tail", name: "おいしいシッポ", image: "images/tail.png" },
+  { id: "soy", name: "ワカクサ大豆", image: "images/soy.png" },
+  { id: "corn", name: "ワカクサコーン", image: "images/corn.png" },
+  { id: "coffee", name: "めざましコーヒー", image: "images/coffee.png" },
+  { id: "pumpkin", name: "ずっしりカボチャ", image: "images/pumpkin.png" },
+  { id: "avocado", name: "つやつやアボカド", image: "images/avocado.png" },
+];
+
+// ===== カテゴリ =====
+const CATEGORIES = [
+  { id: "curry", name: "カレー・シチュー" },
+  { id: "salad", name: "サラダ" },
+  { id: "dessert", name: "デザート・ドリンク" },
+];
+
+// ===== レシピ定義（出典: game8 ポケモンスリープ料理レシピ一覧） =====
+// requires: { 食材id: 必要数, ... }
+const RECIPES = [
+  // --- curry ---
+  { category: "curry", name: "とびはねるカレーうどん", requires: { sausage: 20, herb: 22, ginger: 39, mushroom: 31 } },
+  { category: "curry", name: "しんりょくアボカドグラタン", requires: { milk: 41, potato: 20, oil: 32, avocado: 22 } },
+  { category: "curry", name: "いあいぎりすき焼きカレー", requires: { sausage: 26, leek: 27, egg: 22, honey: 26 } },
+  { category: "curry", name: "めざめるパワーシチュー", requires: { soy: 28, tomato: 25, mushroom: 23, coffee: 16 } },
+  { category: "curry", name: "なりきりバケッチャシチュー", requires: { sausage: 16, potato: 18, mushroom: 25, pumpkin: 10 } },
+  { category: "curry", name: "れんごくコーンキーマカレー", requires: { sausage: 24, herb: 27, ginger: 12, corn: 14 } },
+  { category: "curry", name: "ワカクサカレーパン", requires: { soy: 8, oil: 15, herb: 20, ginger: 20 } },
+  { category: "curry", name: "ニンジャカレー", requires: { soy: 24, sausage: 9, leek: 12, mushroom: 5 } },
+  { category: "curry", name: "ぜったいねむりバターカレー", requires: { cacao: 12, milk: 10, potato: 18, tomato: 15 } },
+  { category: "curry", name: "あぶりテールカレー", requires: { herb: 25, tail: 8 } },
+  { category: "curry", name: "からくちネギもりカレー", requires: { leek: 14, herb: 8, ginger: 10 } },
+  { category: "curry", name: "ピヨピヨパンチ辛口カレー", requires: { herb: 11, honey: 11, coffee: 11 } },
+  { category: "curry", name: "じゅうなんコーンシチュー", requires: { milk: 8, potato: 8, corn: 14 } },
+  { category: "curry", name: "おやこあいカレー", requires: { potato: 4, apple: 11, egg: 8, honey: 12 } },
+  { category: "curry", name: "キノコのほうしカレー", requires: { potato: 9, mushroom: 14 } },
+  { category: "curry", name: "ビルドアップマメカレー", requires: { soy: 12, sausage: 6, egg: 4, herb: 4 } },
+  { category: "curry", name: "ほっこりホワイトシチュー", requires: { milk: 10, potato: 8, mushroom: 4 } },
+  { category: "curry", name: "とけるオムカレー", requires: { egg: 10, tomato: 6 } },
+  { category: "curry", name: "サンパワートマトカレー", requires: { herb: 5, tomato: 10 } },
+  { category: "curry", name: "ひでりカツレツカレー", requires: { sausage: 10, oil: 5 } },
+  { category: "curry", name: "満腹チーズバーグカレー", requires: { milk: 8, sausage: 8 } },
+  { category: "curry", name: "マメバーグカレー", requires: { sausage: 7 } },
+  { category: "curry", name: "ベイビィハニーカレー", requires: { honey: 7 } },
+  { category: "curry", name: "たんじゅんホワイトシチュー", requires: { milk: 7 } },
+  { category: "curry", name: "とくせんリンゴカレー", requires: { apple: 7 } },
+  // --- salad ---
+  { category: "salad", name: "ごろごろねっとうサラダ", requires: { potato: 30, mushroom: 27, corn: 18, pumpkin: 20 } },
+  { category: "salad", name: "じならしワカモレチップス", requires: { soy: 22, herb: 30, corn: 25, avocado: 28 } },
+  { category: "salad", name: "まけんきコーヒーサラダ", requires: { sausage: 28, potato: 22, oil: 22, coffee: 28 } },
+  { category: "salad", name: "りんごさんヨーグルトサラダ", requires: { milk: 18, apple: 28, egg: 35, tomato: 23 } },
+  { category: "salad", name: "はなふぶきミモザサラダ", requires: { sausage: 12, potato: 15, oil: 17, egg: 25 } },
+  { category: "salad", name: "ニンジャサラダ", requires: { soy: 19, leek: 15, ginger: 11, mushroom: 12 } },
+  { category: "salad", name: "ワカクササラダ", requires: { potato: 9, oil: 22, tomato: 14, corn: 17 } },
+  { category: "salad", name: "クロスチョップドサラダ", requires: { sausage: 15, egg: 20, tomato: 10, corn: 11 } },
+  { category: "salad", name: "ヤドンテールのペッパーサラダ", requires: { oil: 15, herb: 10, tail: 10 } },
+  { category: "salad", name: "めいそうスイートサラダ", requires: { apple: 21, honey: 16, corn: 12 } },
+  { category: "salad", name: "くだけるアボカドサラダ", requires: { soy: 18, oil: 10, avocado: 14 } },
+  { category: "salad", name: "キノコのほうしサラダ", requires: { oil: 8, tomato: 8, mushroom: 17 } },
+  { category: "salad", name: "オーバーヒートサラダ", requires: { herb: 17, tomato: 8, ginger: 10 } },
+  { category: "salad", name: "くいしんぼうポテトサラダ", requires: { sausage: 7, potato: 14, apple: 6, egg: 9 } },
+  { category: "salad", name: "ムラっけチョコミートサラダ", requires: { cacao: 14, sausage: 9 } },
+  { category: "salad", name: "うるおいとうふサラダ", requires: { soy: 15, tomato: 9 } },
+  { category: "salad", name: "ばかぢからワイルドサラダ", requires: { sausage: 9, potato: 3, egg: 5, ginger: 6 } },
+  { category: "salad", name: "モーモーカプレーゼ", requires: { milk: 12, oil: 5, tomato: 6 } },
+  { category: "salad", name: "めんえきねぎサラダ", requires: { leek: 10, ginger: 5 } },
+  { category: "salad", name: "みだれづきコーンサラダ", requires: { oil: 8, corn: 9 } },
+  { category: "salad", name: "メロメロりんごのチーズサラダ", requires: { milk: 5, oil: 3, apple: 15 } },
+  { category: "salad", name: "ねっぷうとうふサラダ", requires: { soy: 10, herb: 6 } },
+  { category: "salad", name: "ゆきかきシーザーサラダ", requires: { milk: 10, sausage: 6 } },
+  { category: "salad", name: "あんみんトマトサラダ", requires: { tomato: 8 } },
+  { category: "salad", name: "マメハムサラダ", requires: { sausage: 8 } },
+  { category: "salad", name: "とくせんリンゴサラダ", requires: { apple: 8 } },
+  // --- dessert ---
+  { category: "dessert", name: "みつあつめチョコワッフル", requires: { cacao: 21, oil: 28, honey: 38, corn: 28 } },
+  { category: "dessert", name: "ドキドキこわいかおパンケーキ", requires: { egg: 24, tomato: 29, honey: 32, pumpkin: 18 } },
+  { category: "dessert", name: "ドオーのエクレア", requires: { cacao: 30, milk: 26, honey: 22, coffee: 24 } },
+  { category: "dessert", name: "スパークスパイスコーラ", requires: { leek: 20, apple: 35, ginger: 20, coffee: 12 } },
+  { category: "dessert", name: "フラワーギフトマカロン", requires: { cacao: 25, milk: 10, egg: 25, honey: 17 } },
+  { category: "dessert", name: "おちゃかいコーンスコーン", requires: { milk: 9, apple: 20, ginger: 20, corn: 18 } },
+  { category: "dessert", name: "グラスミキサースムージー", requires: { milk: 14, tomato: 16, avocado: 18 } },
+  { category: "dessert", name: "プリンのプリンアラモード", requires: { milk: 10, apple: 10, egg: 15, honey: 20 } },
+  { category: "dessert", name: "かたやぶりコーンティラミス", requires: { milk: 12, corn: 14, coffee: 14 } },
+  { category: "dessert", name: "はやおきコーヒーゼリー", requires: { milk: 14, honey: 12, coffee: 16 } },
+  { category: "dessert", name: "だいばくはつポップコーン", requires: { milk: 7, oil: 14, corn: 15 } },
+  { category: "dessert", name: "ちからもちソイドーナッツ", requires: { soy: 16, cacao: 7, oil: 12 } },
+  { category: "dessert", name: "ネロリのデトックスティー", requires: { apple: 15, ginger: 11, mushroom: 9 } },
+  { category: "dessert", name: "ふくつのジンジャークッキー", requires: { cacao: 5, egg: 4, honey: 14, ginger: 12 } },
+  { category: "dessert", name: "あくまのキッスフルーツオレ", requires: { cacao: 8, milk: 9, apple: 11, honey: 7 } },
+  { category: "dessert", name: "あまいかおりチョコケーキ", requires: { cacao: 8, milk: 7, honey: 9 } },
+  { category: "dessert", name: "はなびらのまいチョコタルト", requires: { cacao: 11, apple: 11 } },
+  { category: "dessert", name: "はりきりプロテインスムージー", requires: { soy: 15, cacao: 8 } },
+  { category: "dessert", name: "おおきいマラサダ", requires: { milk: 7, oil: 10, honey: 6 } },
+  { category: "dessert", name: "マイペースやさいジュース", requires: { apple: 7, tomato: 9 } },
+  { category: "dessert", name: "かるわざソイケーキ", requires: { soy: 7, egg: 8 } },
+  { category: "dessert", name: "ひのこのジンジャーティー", requires: { apple: 7, ginger: 9 } },
+  { category: "dessert", name: "じゅくせいスイートポテト", requires: { milk: 5, potato: 9 } },
+  { category: "dessert", name: "ねがいごとアップルパイ", requires: { milk: 4, apple: 12 } },
+  { category: "dessert", name: "クラフトサイコソーダ", requires: { honey: 9 } },
+  { category: "dessert", name: "とくせんリンゴジュース", requires: { apple: 8 } },
+  { category: "dessert", name: "モーモーホットミルク", requires: { milk: 7 } },
+];
+
+const STORAGE_KEY = "item-counts";
+const itemById = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
+
+let counts = loadCounts();
+let currentCategory = "all";
+
+function renderTabs() {
+  const tabs = document.getElementById("tabs");
+  const list = [{ id: "all", name: "すべて" }, ...CATEGORIES];
+  tabs.innerHTML = list
+    .map((c) => `<button type="button" data-cat="${c.id}" class="${c.id === currentCategory ? "active" : ""}">${c.name}</button>`)
+    .join("");
+  tabs.querySelectorAll("button").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      currentCategory = btn.dataset.cat;
+      renderTabs();
+      renderResults();
+    })
+  );
+}
+
+function categoryName(id) {
+  return CATEGORIES.find((c) => c.id === id)?.name ?? "";
+}
+
+function loadCounts() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveCounts() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(counts));
+  } catch {}
+}
+
+function getCount(id) {
+  return counts[id] || 0;
+}
+
+function setCount(id, value) {
+  counts[id] = Math.max(0, Math.floor(Number(value) || 0));
+  saveCounts();
+}
+
+// ----- アイテム一覧 -----
+function renderItems() {
+  const grid = document.getElementById("items");
+  grid.innerHTML = "";
+
+  for (const item of ITEMS) {
+    const card = document.createElement("div");
+    card.className = "item-card";
+    card.innerHTML = `
+      <div class="item-img">
+        <img src="${item.image}" alt="${item.name}">
+        <span class="fallback">${item.name.charAt(0)}</span>
+      </div>
+      <div class="item-name">${item.name}</div>
+      <div class="counter">
+        <button type="button" data-step="-1" aria-label="${item.name}を減らす">−</button>
+        <input type="number" min="0" inputmode="numeric" value="${getCount(item.id)}" aria-label="${item.name}の個数">
+        <button type="button" data-step="1" aria-label="${item.name}を増やす">＋</button>
+      </div>
+    `;
+
+    const img = card.querySelector("img");
+    img.addEventListener("error", () => card.querySelector(".item-img").classList.add("no-img"));
+
+    const input = card.querySelector("input");
+    const update = (v) => {
+      setCount(item.id, v);
+      input.value = getCount(item.id);
+      card.classList.toggle("owned", getCount(item.id) > 0);
+      renderResults();
+    };
+    input.addEventListener("input", () => update(input.value));
+    input.addEventListener("focus", () => input.select());
+    card.querySelectorAll("button").forEach((btn) =>
+      btn.addEventListener("click", () => update(getCount(item.id) + Number(btn.dataset.step)))
+    );
+
+    card.classList.toggle("owned", getCount(item.id) > 0);
+    grid.appendChild(card);
+  }
+}
+
+// ----- 判定 -----
+function evaluate(recipe) {
+  const missing = [];
+  let totalMissing = 0;
+  let totalRequired = 0;
+  for (const [id, need] of Object.entries(recipe.requires)) {
+    const lack = Math.max(0, need - getCount(id));
+    totalRequired += need;
+    if (lack > 0) {
+      missing.push({ id, lack });
+      totalMissing += lack;
+    }
+  }
+  return { recipe, missing, totalMissing, totalRequired };
+}
+
+function requiresHtml(recipe) {
+  return Object.entries(recipe.requires)
+    .map(([id, need]) => {
+      const have = getCount(id);
+      const ok = have >= need;
+      return `<span class="req ${ok ? "ok" : "ng"}">${itemById[id]?.name ?? id} ${have}/${need}</span>`;
+    })
+    .join("");
+}
+
+function catTag(recipe) {
+  return currentCategory === "all" ? `<span class="cat cat-${recipe.category}">${categoryName(recipe.category)}</span>` : "";
+}
+
+function renderResults() {
+  const results = RECIPES.filter((r) => currentCategory === "all" || r.category === currentCategory).map(evaluate);
+  const can = results.filter((r) => r.totalMissing === 0);
+  const almost = results
+    .filter((r) => r.totalMissing > 0)
+    .sort((a, b) => a.totalMissing - b.totalMissing || a.missing.length - b.missing.length);
+
+  document.getElementById("can-count").textContent = can.length;
+
+  const canEl = document.getElementById("can-make");
+  canEl.innerHTML = can.length
+    ? can
+        .map((r) => `<li class="recipe can"><div class="recipe-name">${r.recipe.name}${catTag(r.recipe)}</div><div class="reqs">${requiresHtml(r.recipe)}</div></li>`)
+        .join("")
+    : `<li class="empty">まだ作れるものはありません</li>`;
+
+  const almostEl = document.getElementById("almost");
+  almostEl.innerHTML = almost.length
+    ? almost
+        .map((r) => {
+          const lacks = r.missing
+            .map((m) => `<span class="lack">${itemById[m.id]?.name ?? m.id} ×${m.lack}</span>`)
+            .join("");
+          return `<li class="recipe">
+            <div class="recipe-head">
+              <div class="recipe-name">${r.recipe.name}${catTag(r.recipe)}</div>
+              <div class="total">あと <strong>${r.totalMissing}</strong> 個</div>
+            </div>
+            <div class="lacks">不足: ${lacks}</div>
+            <div class="reqs">${requiresHtml(r.recipe)}</div>
+          </li>`;
+        })
+        .join("")
+    : `<li class="empty">なし</li>`;
+}
+
+// confirm() はブラウザや埋め込み環境で無効化されることがあるため、ボタン2度押しで確認する
+const resetBtn = document.getElementById("reset");
+let resetTimer = null;
+resetBtn.addEventListener("click", () => {
+  if (!resetBtn.classList.contains("confirm")) {
+    resetBtn.classList.add("confirm");
+    resetBtn.textContent = "もう一度押すと0に戻します";
+    resetTimer = setTimeout(cancelReset, 3000);
+    return;
+  }
+  cancelReset();
+  counts = {};
+  saveCounts();
+  renderItems();
+  renderResults();
+});
+
+function cancelReset() {
+  clearTimeout(resetTimer);
+  resetBtn.classList.remove("confirm");
+  resetBtn.textContent = "リセット";
+}
+
+renderTabs();
+renderItems();
+renderResults();
+
+</script>
+</body>
+</html>

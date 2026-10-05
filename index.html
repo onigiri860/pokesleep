@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ポケスリ料理判定</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>ポケスリ料理判定</h1>
+    <button id="reset" type="button">リセット</button>
+  </header>
+
+  <main>
+    <section>
+      <h2>持っている食材</h2>
+      <div id="items" class="item-grid"></div>
+    </section>
+
+    <nav id="tabs" class="tabs"></nav>
+
+    <section>
+      <h2>作れるもの <span id="can-count" class="badge"></span></h2>
+      <ul id="can-make" class="recipe-list"></ul>
+    </section>
+
+    <section>
+      <h2>あと少しで作れるもの <small>（不足数が少ない順）</small></h2>
+      <ul id="almost" class="recipe-list"></ul>
+    </section>
+  </main>
+
+  <footer>
+    非公式のファンツールです。レシピデータ出典: <a href="https://game8.jp/pokemonsleep/543259" target="_blank" rel="noopener">Game8 ポケモンスリープ攻略</a>。入力した個数はお使いのブラウザにのみ保存されます。
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
