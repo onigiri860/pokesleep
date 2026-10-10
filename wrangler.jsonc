@@ -2,5 +2,10 @@
   "name": "pokesleep",
   "compatibility_date": "2026-10-01",
   // .html を削るリダイレクトを止める（Search Console の確認ファイルをそのまま返すため）
-  "assets": { "directory": "./public", "html_handling": "none" }
+  // none だと / が index.html にならないので、見つからないパスは index.html を返す
+  "assets": {
+    "directory": "./public",
+    "html_handling": "none",
+    "not_found_handling": "single-page-application"
+  }
 }
