@@ -1,5 +1,6 @@
 {
   "name": "pokesleep",
   "compatibility_date": "2026-10-01",
-  "assets": { "directory": "./public" }
+  // .html を削るリダイレクトを止める（Search Console の確認ファイルをそのまま返すため）
+  "assets": { "directory": "./public", "html_handling": "none" }
 }
